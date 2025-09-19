@@ -160,25 +160,25 @@ async def get_outfit_recommendation(request: OutfitRequest):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_interaction(request: ChatRequest):
-    """Chat interaction endpoint for conversational interface."""
+    """Handle chat interactions"""
     try:
-        logger.info(f"Processing chat message: {request.message[:100]}...")
-        
-        # Process the chat message using the orchestrator
+        orchestrator = get_orchestrator()
         result = await orchestrator.process_request(
-            user_message=request.message,
-            thread_id="frontend-chat",
-            conversation_history=request.conversation_history
+            request.message, 
+            request.thread_id or "default",
+            request.conversation_history or []
         )
+        
+        # result is an AgentState object, access response attribute directly
+        response_text = result.response or 'No response generated'
         
         return ChatResponse(
-            response=result.response or "I couldn't generate a response.",
-            location=result.location,
-            weather=result.weather_data if result.weather_data else None,
-            outfit_suggestion=result.outfit_suggestion if result.outfit_suggestion else None
+            response=response_text,
+            thread_id=request.thread_id or "default",
+            context=result.metadata or {}
         )
     except Exception as e:
-        logger.error(f"Error processing chat message: {e}")
+        logger.error(f"Chat error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
