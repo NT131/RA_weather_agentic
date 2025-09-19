@@ -11,28 +11,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from weather_outfit_ai.config import config
-from weather_outfit_ai.graph.graph import create_outfit_graph
+from weather_outfit_ai.orchestrator.outfit_orchestrator import get_orchestrator
 from weather_outfit_ai.models.state import AgentState
+from weather_outfit_ai.models.schemas import OutfitRequest, HealthResponse, OutfitRecommendationResponse
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
-# Global graph instance
-graph = None
+# Global orchestrator instance
+orchestrator = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global graph
+    global orchestrator
     
     # Startup
     logger.info("Starting Weather Outfit AI application...")
     try:
         config.validate()
-        graph = create_outfit_graph()
-        logger.info("Graph initialized successfully")
+        orchestrator = get_orchestrator()
+        logger.info("Orchestrator initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize application: {e}")
         raise
@@ -106,9 +107,9 @@ async def health_check():
         # Validate configuration
         config.validate()
         
-        # Check if graph is initialized
-        if graph is None:
-            raise Exception("Graph not initialized")
+        # Check if orchestrator is initialized
+        if orchestrator is None:
+            raise Exception("Orchestrator not initialized")
         
         return HealthResponse(
             status="healthy",
@@ -119,101 +120,37 @@ async def health_check():
         raise HTTPException(status_code=503, detail=f"Service unhealthy: {e}")
 
 
-@app.post("/recommend", response_model=OutfitResponse)
+@app.post("/outfit-recommendation", response_model=OutfitRecommendationResponse)
 async def get_outfit_recommendation(request: OutfitRequest):
-    """Get a single outfit recommendation."""
+    """Get an outfit recommendation based on weather and preferences."""
     try:
-        if graph is None:
-            raise HTTPException(status_code=503, detail="Service not initialized")
+        logger.info(f"Processing outfit request for {request.location}")
         
-        # Enhance message with optional parameters
-        message = request.message
-        if request.location:
-            message = f"{message} in {request.location}"
-        if request.context:
-            message = f"{message} for {request.context}"
+        # Convert request to our state format
+        initial_state = {
+            "location": request.location,
+            "style_preference": request.style_preference,
+            "time_horizon": request.time_horizon,
+            "weather_data": {},
+            "wardrobe_items": [],
+            "outfit_suggestion": "",
+            "conversation_history": [],
+            "current_step": "start"
+        }
         
-        # Initialize the agent state
-        initial_state = AgentState(
-            conversation_history=request.conversation_history or [],
-            metadata={"user_message": message}
+        # Process the request using the orchestrator
+        result = await orchestrator.process_request(initial_state)
+        
+        return OutfitRecommendationResponse(
+            location=result["location"],
+            weather=result.get("weather_data", {}),
+            outfit_suggestion=result.get("outfit_suggestion", ""),
+            style_preference=result.get("style_preference", ""),
+            additional_info=result.get("additional_info", "")
         )
-        
-        # Run the graph
-        config_dict = {"configurable": {"thread_id": f"api-session"}}
-        
-        logger.info(f"Processing outfit request: {message}")
-        result = await graph.ainvoke(initial_state, config=config_dict)
-        
-        # Convert result to response format
-        weather_data = None
-        if result.weather_data:
-            weather_data = {
-                "location": result.weather_data.location,
-                "temperature": result.weather_data.temperature,
-                "feels_like": result.weather_data.feels_like,
-                "description": result.weather_data.description,
-                "conditions": result.weather_data.conditions,
-                "humidity": result.weather_data.humidity,
-                "wind_speed": result.weather_data.wind_speed,
-            }
-        
-        final_recommendation = None
-        if result.final_recommendation:
-            outfit = result.final_recommendation
-            final_recommendation = {
-                "outfit_description": outfit.outfit_description,
-                "styling_advice": outfit.styling_advice,
-                "weather_appropriateness": outfit.weather_appropriateness,
-                "formality_match": outfit.formality_match,
-                "selected_items": {
-                    "top": {
-                        "name": outfit.selected_top.name,
-                        "color": outfit.selected_top.color,
-                        "material": outfit.selected_top.material
-                    } if outfit.selected_top else None,
-                    "bottom": {
-                        "name": outfit.selected_bottom.name,
-                        "color": outfit.selected_bottom.color,
-                        "material": outfit.selected_bottom.material
-                    } if outfit.selected_bottom else None,
-                    "footwear": {
-                        "name": outfit.selected_footwear.name,
-                        "color": outfit.selected_footwear.color,
-                        "material": outfit.selected_footwear.material
-                    } if outfit.selected_footwear else None,
-                    "outerwear": {
-                        "name": outfit.selected_outerwear.name,
-                        "color": outfit.selected_outerwear.color,
-                        "material": outfit.selected_outerwear.material
-                    } if outfit.selected_outerwear else None,
-                    "accessories": [
-                        {
-                            "name": acc.name,
-                            "color": acc.color,
-                            "material": acc.material
-                        } for acc in outfit.selected_accessories
-                    ] if outfit.selected_accessories else []
-                }
-            }
-        
-        return OutfitResponse(
-            success=True,
-            response=result.response or "Here's your outfit recommendation!",
-            location=result.location,
-            weather_data=weather_data,
-            final_recommendation=final_recommendation,
-            errors=result.errors,
-            conversation_history=result.conversation_history
-        )
-        
     except Exception as e:
-        logger.error(f"Error processing outfit request: {e}")
-        return OutfitResponse(
-            success=False,
-            response="Sorry, I encountered an error processing your request.",
-            errors=[str(e)]
-        )
+        logger.error(f"Error processing outfit recommendation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/chat", response_model=OutfitResponse)

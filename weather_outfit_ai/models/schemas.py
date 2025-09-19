@@ -136,3 +136,26 @@ class ConversationResponse(BaseModel):
     response_type: str = Field(..., description="Type of response: outfit_recommendation, weather_info, general_chat")
     confidence: float = Field(..., description="Confidence in the response quality (0.0-1.0)")
     suggestions: list[str] = Field(default_factory=list, description="Follow-up suggestions for the user")
+
+
+# API Request/Response Models
+class OutfitRequest(BaseModel):
+    """API request model for outfit recommendations."""
+    location: str = Field(..., description="Location for weather data")
+    style_preference: str = Field(default="casual", description="Style preference")
+    time_horizon: str = Field(default="now", description="Time horizon for the outfit")
+
+
+class HealthResponse(BaseModel):
+    """Health check response model."""
+    status: str = Field(..., description="Service status")
+    message: str = Field(..., description="Status message")
+
+
+class OutfitRecommendationResponse(BaseModel):
+    """API response model for outfit recommendations."""
+    location: str = Field(..., description="Location used for weather data")
+    weather: dict = Field(default_factory=dict, description="Weather information")
+    outfit_suggestion: str = Field(..., description="Complete outfit recommendation")
+    style_preference: str = Field(..., description="Style preference used")
+    additional_info: str = Field(default="", description="Additional information or tips")
