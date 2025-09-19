@@ -53,30 +53,148 @@ def wait_for_chromadb(max_retries: int = 30, delay: int = 2):
     raise Exception("ChromaDB is not available")
 
 
-def populate_wardrobe_from_csv(csv_file_path: str):
-    """Populate the wardrobe with data from a CSV file."""
+def count_csv_items(csv_file_path: str) -> int:
+    """Count the number of items in the CSV file."""
+    try:
+        with open(csv_file_path, encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            return sum(1 for _ in reader)
+    except Exception:
+        return 0
+
+
+def get_existing_item_names(wardrobe_service: WardrobeService) -> set:
+    """Get the names of all existing items in the wardrobe."""
+    try:
+        all_items = wardrobe_service.list_all_items()
+        return {item.name for item in all_items}
+    except Exception:
+        return set()
+
+
+def get_csv_item_names(csv_file_path: str) -> set:
+    """Get the names of all items in the CSV file."""
+    try:
+        csv_names = set()
+        with open(csv_file_path, encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                if row.get("name"):
+                    csv_names.add(row["name"].strip())
+        return csv_names
+    except Exception:
+        return set()
+
+
+def remove_items_not_in_csv(wardrobe_service: WardrobeService, csv_names: set, existing_names: set) -> int:
+    """Remove items from wardrobe that are no longer in the CSV."""
+    items_to_remove = existing_names - csv_names
+    items_removed = 0
+    
+    if not items_to_remove:
+        return 0
+    
+    print(f"🗑️  Found {len(items_to_remove)} items in wardrobe that are no longer in CSV:")
+    for item_name in sorted(items_to_remove):
+        print(f"   - {item_name}")
+    
+    try:
+        # Get all items to find IDs for removal
+        all_items = wardrobe_service.list_all_items()
+        item_id_map = {item.name: item.id for item in all_items}
+        
+        for item_name in items_to_remove:
+            if item_name in item_id_map:
+                try:
+                    if wardrobe_service.remove_clothing_item(item_id_map[item_name]):
+                        print(f"✅ Removed: {item_name}")
+                        items_removed += 1
+                    else:
+                        print(f"❌ Failed to remove: {item_name}")
+                except Exception as e:
+                    print(f"❌ Error removing {item_name}: {e}")
+    
+    except Exception as e:
+        print(f"❌ Error during removal process: {e}")
+    
+    return items_removed
+
+
+def populate_wardrobe_from_csv(csv_file_path: str, force_reload: bool = False, sync_mode: bool = False):
+    """Populate the wardrobe with data from a CSV file.
+    
+    Args:
+        csv_file_path: Path to the CSV file
+        force_reload: If True, clear wardrobe and reload all items
+        sync_mode: If True, synchronize wardrobe with CSV (add new, remove deleted)
+    """
 
     # Wait for ChromaDB to be available (important for Docker startup)
     wardrobe_service = wait_for_chromadb()
-
-    # Check if wardrobe already has data
-    try:
-        stats = wardrobe_service.get_wardrobe_stats()
-        if stats.get("total_items", 0) > 0:
-            print(
-                f"📦 Wardrobe already contains {stats['total_items']} items. Skipping population."
-            )
-            return
-    except Exception as e:
-        print(f"⚠️ Could not check wardrobe stats: {e}")
-
-    print(f"📂 Reading wardrobe data from: {csv_file_path}")
 
     if not os.path.exists(csv_file_path):
         print(f"❌ CSV file not found: {csv_file_path}")
         return
 
+    # Count items in CSV
+    csv_item_count = count_csv_items(csv_file_path)
+    if csv_item_count == 0:
+        print(f"⚠️ No items found in CSV file: {csv_file_path}")
+        return
+
+    # Get CSV item names for comparison
+    csv_names = get_csv_item_names(csv_file_path)
+
+    # Check current wardrobe state
+    try:
+        stats = wardrobe_service.get_wardrobe_stats()
+        current_item_count = stats.get("total_items", 0)
+        
+        if force_reload and current_item_count > 0:
+            print(f"🗑️  Force reload: Clearing existing {current_item_count} items...")
+            if wardrobe_service.clear_wardrobe():
+                print("✅ Wardrobe cleared successfully")
+                existing_names = set()
+            else:
+                print("❌ Failed to clear wardrobe")
+                return
+        elif current_item_count > 0:
+            # Get existing item names for comparison
+            existing_names = get_existing_item_names(wardrobe_service)
+            
+            if current_item_count == csv_item_count and existing_names == csv_names:
+                print(f"📦 Wardrobe already contains {current_item_count} items (same as CSV). Skipping population.")
+                return
+            elif current_item_count < csv_item_count:
+                print(f"📦 Wardrobe has {current_item_count} items, CSV has {csv_item_count}. Adding new items...")
+            elif current_item_count > csv_item_count or existing_names != csv_names:
+                if sync_mode:
+                    print(f"🔄 Sync mode: Wardrobe has {current_item_count} items, CSV has {csv_item_count}.")
+                    # Remove items not in CSV
+                    items_removed = remove_items_not_in_csv(wardrobe_service, csv_names, existing_names)
+                    if items_removed > 0:
+                        print(f"�️  Removed {items_removed} items no longer in CSV")
+                        # Update existing names after removal
+                        existing_names = get_existing_item_names(wardrobe_service)
+                else:
+                    print(f"📦 Wardrobe has {current_item_count} items, CSV has {csv_item_count}.")
+                    missing_in_csv = existing_names - csv_names
+                    if missing_in_csv:
+                        print(f"⚠️  Warning: {len(missing_in_csv)} items in wardrobe are not in CSV:")
+                        for item_name in sorted(missing_in_csv):
+                            print(f"   - {item_name}")
+                        print("💡 Use --sync flag to automatically remove items not in CSV")
+        else:
+            existing_names = set()
+        
+    except Exception as e:
+        print(f"⚠️ Could not check wardrobe stats: {e}")
+        existing_names = set()
+
+    print(f"📂 Reading wardrobe data from: {csv_file_path}")
+
     items_added = 0
+    items_skipped = 0
     items_failed = 0
 
     try:
@@ -89,9 +207,16 @@ def populate_wardrobe_from_csv(csv_file_path: str):
                 reader, start=2
             ):  # Start at 2 since row 1 is header
                 try:
+                    item_name = row["name"].strip()
+                    
+                    # Skip if item already exists (unless force reload)
+                    if not force_reload and item_name in existing_names:
+                        items_skipped += 1
+                        continue
+
                     # Parse the CSV row into a PersonalClothingItem
                     clothing_item = PersonalClothingItem(
-                        name=row["name"].strip(),
+                        name=item_name,
                         category=row["category"].strip(),
                         subcategory=(
                             row["subcategory"].strip() if row["subcategory"] else None
@@ -133,6 +258,13 @@ def populate_wardrobe_from_csv(csv_file_path: str):
     if items_failed > 0:
         print(f"❌ Failed to add: {items_failed} items")
 
+    print("\n🎉 Wardrobe population complete!")
+    print(f"✅ Successfully added: {items_added} items")
+    if items_skipped > 0:
+        print(f"⏭️  Skipped existing: {items_skipped} items")
+    if items_failed > 0:
+        print(f"❌ Failed to add: {items_failed} items")
+
     # Print final stats
     try:
         final_stats = wardrobe_service.get_wardrobe_stats()
@@ -150,9 +282,20 @@ def populate_wardrobe_from_csv(csv_file_path: str):
 
 def main():
     """Main function to populate wardrobe from CSV."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Populate wardrobe from CSV file")
+    parser.add_argument("--force", "-f", action="store_true", 
+                       help="Force reload all items, even if they already exist")
+    parser.add_argument("--sync", "-s", action="store_true",
+                       help="Sync wardrobe with CSV (add new items, remove items not in CSV)")
+    parser.add_argument("--csv", type=str, 
+                       help="Path to CSV file (default: data/sample_wardrobe.csv)")
+    
+    args = parser.parse_args()
 
     # Determine CSV file path
-    csv_file_path = os.getenv("WARDROBE_CSV_PATH", "data/sample_wardrobe.csv")
+    csv_file_path = args.csv or os.getenv("WARDROBE_CSV_PATH", "data/sample_wardrobe.csv")
 
     # If running in Docker, the CSV should be in the data directory
     if not os.path.exists(csv_file_path):
@@ -161,9 +304,14 @@ def main():
 
     print("🌤️ Weather Outfit AI - Wardrobe Population")
     print("=" * 50)
+    
+    if args.force:
+        print("🔄 Force reload enabled - will reload all items")
+    elif args.sync:
+        print("🔄 Sync mode enabled - will add new items and remove items not in CSV")
 
     try:
-        populate_wardrobe_from_csv(str(csv_file_path))
+        populate_wardrobe_from_csv(str(csv_file_path), force_reload=args.force, sync_mode=args.sync)
     except KeyboardInterrupt:
         print("\n🛑 Population interrupted by user")
         sys.exit(1)

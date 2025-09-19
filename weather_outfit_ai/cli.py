@@ -57,8 +57,8 @@ def initialize_wardrobe():
         
         console.print("[blue]🔄 Initializing wardrobe...[/blue]")
         
-        # Populate wardrobe (will skip if already populated)
-        populate_wardrobe_from_csv(str(csv_file_path))
+        # Populate wardrobe with sync mode (will detect and add new items, remove deleted items)
+        populate_wardrobe_from_csv(str(csv_file_path), force_reload=False, sync_mode=True)
         
         # Get final stats
         from weather_outfit_ai.services.wardrobe_service import WardrobeService
