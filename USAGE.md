@@ -15,6 +15,14 @@ The server will be available at:
 - Documentation: `http://localhost:8000/docs`
 - Health Check: `http://localhost:8000/health`
 
+When running the web server multiple times, you might get an error indicating that the address is already in use. 
+Run the following command to kill all current processes on the relevant port and restart the web server. 
+```bash
+sudo lsof -t -i tcp:8000 | xargs kill -9
+python run.py web
+```
+
+
 ### 2. CLI Interface
 
 #### Interactive Chat
@@ -151,3 +159,36 @@ The application uses a LangGraph-based workflow:
 5. **Conversation Agent**: Generates user-friendly response
 
 The flow can be customized based on user intent (full recommendation, weather only, etc.).
+
+```mermaid
+---
+config:
+  layout: fixed
+---
+flowchart TD
+    Start(["User Input"]) --> Supervisor["Supervisor Node - supervisor_agent.plan()"]
+    Supervisor --> Router{"route_after_supervisor() - Check Action Type"}
+    Router -- action: full_recommendation --> Weather["Weather Node - weather_agent.run()"]
+    Router -- action: weather_only --> WeatherDirect["Weather Direct - weather_agent.run()"]
+    Router -- action: wardrobe_only --> WardrobeDirect["Wardrobe Direct - wardrobe_agent.run()"]
+    Router -- action: conversation_only --> Conversation["Conversation Node - conversation_agent.run()"]
+    Weather --> Wardrobe["Wardrobe Node - wardrobe_agent.run()"]
+    Wardrobe --> Design["Design Node - design_agent.run()"]
+    Design --> Conversation
+    WeatherDirect --> Conversation
+    WardrobeDirect --> Conversation
+    Conversation --> End(["Final Response"])
+     Start:::startEnd
+     Supervisor:::agentNode
+     Router:::routerNode
+     Weather:::agentNode
+     WeatherDirect:::agentNode
+     WardrobeDirect:::agentNode
+     Conversation:::agentNode
+     Wardrobe:::agentNode
+     Design:::agentNode
+     End:::startEnd
+    classDef agentNode fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef routerNode fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef startEnd fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+```
