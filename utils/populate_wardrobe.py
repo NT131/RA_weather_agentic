@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 # Add the weather_outfit_ai package to the Python path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from weather_outfit_ai.models.schemas import PersonalClothingItem
 from weather_outfit_ai.services.wardrobe_service import WardrobeService

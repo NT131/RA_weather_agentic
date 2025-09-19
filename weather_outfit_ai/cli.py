@@ -4,6 +4,7 @@ CLI interface for the Weather Outfit AI system.
 """
 import asyncio
 import sys
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -28,6 +29,52 @@ def validate_config():
         console.print(f"[red]Configuration Error: {e}[/red]")
         console.print("[yellow]Please check your .env file or environment variables.[/yellow]")
         raise typer.Exit(1)
+
+
+def initialize_wardrobe():
+    """Initialize and populate the wardrobe with items from CSV."""
+    try:
+        # Add the project root to Python path for imports
+        import sys
+        from pathlib import Path
+        
+        project_root = Path(__file__).parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        
+        # Import here to avoid circular imports
+        from utils.populate_wardrobe import populate_wardrobe_from_csv
+        
+        # Find the CSV file
+        csv_file_path = Path("data/sample_wardrobe.csv")
+        if not csv_file_path.exists():
+            # Try relative to project root
+            csv_file_path = project_root / "data" / "sample_wardrobe.csv"
+        
+        if not csv_file_path.exists():
+            console.print("[yellow]⚠️  Warning: sample_wardrobe.csv not found. Wardrobe may be empty.[/yellow]")
+            return
+        
+        console.print("[blue]🔄 Initializing wardrobe...[/blue]")
+        
+        # Populate wardrobe (will skip if already populated)
+        populate_wardrobe_from_csv(str(csv_file_path))
+        
+        # Get final stats
+        from weather_outfit_ai.services.wardrobe_service import WardrobeService
+        wardrobe_service = WardrobeService()
+        stats = wardrobe_service.get_wardrobe_stats()
+        
+        console.print(f"[green]✅ Wardrobe ready with {stats.get('total_items', 0)} items![/green]")
+        
+        # Show category breakdown
+        if stats.get('categories'):
+            categories_text = ", ".join([f"{cat}: {count}" for cat, count in stats['categories'].items()])
+            console.print(f"[dim]   Categories: {categories_text}[/dim]")
+            
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Warning: Failed to initialize wardrobe: {e}[/yellow]")
+        console.print("[dim]   The system will still work but may have limited clothing options.[/dim]")
 
 
 async def run_graph_interaction(user_message: str, conversation_history: Optional[list] = None) -> dict:
@@ -141,6 +188,7 @@ def display_result(result: dict):
 def chat():
     """Start an interactive chat session."""
     validate_config()
+    initialize_wardrobe()
     
     console.print(Panel(
         "[bold blue]Welcome to Weather Outfit AI![/bold blue]\n\n"
@@ -192,6 +240,7 @@ def recommend(
 ):
     """Get a single outfit recommendation."""
     validate_config()
+    initialize_wardrobe()
     
     # Enhance message with optional parameters
     if location:
