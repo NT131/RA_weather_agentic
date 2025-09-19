@@ -32,6 +32,23 @@ services:
       timeout: 10s
       retries: 3
 
+  cli:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT}
+    env_file:
+      - .env
+    command: python run.py cli
+    stdin_open: true
+    tty: true
+    profiles:
+      - cli
+    volumes:
+      - ./wardrobe_db:/app/wardrobe_db
+
 networks:
   default:
     name: weather-outfit-ai

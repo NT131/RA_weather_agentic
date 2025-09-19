@@ -53,13 +53,20 @@ uv run python run.py frontend
 ### Option 2: Docker Compose (Easy Deployment)
 
 ```bash
-# Build and run both services
+# Build and run all services
 docker-compose up --build
+
+# Or run specific combinations:
+docker-compose up backend frontend  # Web stack only
+docker-compose --profile cli run --rm cli  # CLI tool only
 
 # Access at:
 # Frontend: http://localhost:8501
 # Backend: http://localhost:8000
+# CLI: Interactive terminal interface
 ```
+
+**🐳 Complete Docker Guide**: See [DOCKER_USAGE.md](./DOCKER_USAGE.md) for detailed Docker usage instructions including CLI integration.
 
 ### Prerequisites
 - **Python 3.10+** with **UV** (recommended) OR **Docker & Docker Compose**
