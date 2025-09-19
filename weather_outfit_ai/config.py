@@ -20,6 +20,19 @@ class Config:
         return os.getenv("OPENAI_API_KEY", "")
 
     @property
+    def OPENAI_MODEL(self) -> str:  # noqa: N802
+        """Get OpenAI model name from environment."""
+        return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    @property
+    def OPENAI_TEMPERATURE(self) -> float:  # noqa: N802
+        """Get OpenAI temperature from environment."""
+        try:
+            return float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+        except ValueError:
+            return 0.7
+
+    @property
     def LANGSMITH_API_KEY(self) -> str:  # noqa: N802
         """Get LangSmith API key from environment."""
         return os.getenv("LANGSMITH_API_KEY", "")
@@ -92,6 +105,8 @@ class Config:
         return {
             "LOG_LEVEL": self.LOG_LEVEL,
             "OPENAI_API_KEY": "***" if self.OPENAI_API_KEY else None,
+            "OPENAI_MODEL": self.OPENAI_MODEL,
+            "OPENAI_TEMPERATURE": self.OPENAI_TEMPERATURE,
             "LANGSMITH_API_KEY": "***" if self.LANGSMITH_API_KEY else None,
             "LANGSMITH_PROJECT": self.LANGSMITH_PROJECT,
             "LANGSMITH_TRACING": self.LANGSMITH_TRACING,

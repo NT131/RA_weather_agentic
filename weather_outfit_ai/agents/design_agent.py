@@ -32,15 +32,52 @@ class DesignAgent:
         items_summary = self._build_items_summary(wardrobe_selection)
         prompt = Prompts.design_agent(weather, context, items_summary)
 
-        response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-
-        ai_response = response.content.strip()
-
-        outfit_recommendation = self._parse_outfit_response(ai_response, wardrobe_selection)
+        # Use structured output with Pydantic model
+        structured_llm = self.llm.with_structured_output(OutfitRecommendation)
+        
+        try:
+            outfit_recommendation = await structured_llm.ainvoke([{"role": "user", "content": prompt}])
+            # Validate and populate items from wardrobe selection
+            outfit_recommendation = self._validate_and_populate_outfit(outfit_recommendation, wardrobe_selection)
+        except Exception as e:
+            print(f"DesignAgent structured output error: {e}")
+            # Fallback to unstructured parsing
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            ai_response = response.content.strip()
+            outfit_recommendation = self._parse_outfit_response(ai_response, wardrobe_selection)
 
         state.final_recommendation = outfit_recommendation
-
         return state
+
+    def _validate_and_populate_outfit(self, outfit: OutfitRecommendation, wardrobe) -> OutfitRecommendation:
+        """Validate the structured outfit response and populate with actual items from wardrobe."""
+        all_items = self._create_item_lookup(wardrobe)
+        
+        # If the structured output contains item names as strings, find the actual items
+        if outfit.selected_top and isinstance(outfit.selected_top, str):
+            outfit.selected_top = self._find_item_by_name(outfit.selected_top, all_items)
+        
+        if outfit.selected_bottom and isinstance(outfit.selected_bottom, str):
+            outfit.selected_bottom = self._find_item_by_name(outfit.selected_bottom, all_items)
+            
+        if outfit.selected_footwear and isinstance(outfit.selected_footwear, str):
+            outfit.selected_footwear = self._find_item_by_name(outfit.selected_footwear, all_items)
+            
+        if outfit.selected_outerwear and isinstance(outfit.selected_outerwear, str):
+            outfit.selected_outerwear = self._find_item_by_name(outfit.selected_outerwear, all_items)
+        
+        # Handle accessories list
+        validated_accessories = []
+        for acc in outfit.selected_accessories:
+            if isinstance(acc, str):
+                acc_item = self._find_item_by_name(acc, all_items)
+                if acc_item:
+                    validated_accessories.append(acc_item)
+            elif isinstance(acc, PersonalClothingItem):
+                validated_accessories.append(acc)
+        outfit.selected_accessories = validated_accessories
+        
+        return outfit
 
 
     def _build_items_summary(self, wardrobe) -> str:

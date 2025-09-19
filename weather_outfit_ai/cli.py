@@ -14,8 +14,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from weather_outfit_ai.config import config
-from weather_outfit_ai.graph.graph import create_outfit_graph
-from weather_outfit_ai.models.state import AgentState
+from weather_outfit_ai.orchestrator.outfit_orchestrator import get_orchestrator
 
 app = typer.Typer(help="Weather Outfit AI - Get personalized outfit recommendations")
 console = Console()
@@ -78,44 +77,27 @@ def initialize_wardrobe():
 
 
 async def run_graph_interaction(user_message: str, conversation_history: Optional[list] = None) -> dict:
-    """Run the graph with user input and return the result."""
-    # Create the graph
-    graph = create_outfit_graph()
-    
-    # Initialize the agent state
-    initial_state = AgentState(
-        conversation_history=conversation_history or [],
-        metadata={"user_message": user_message}
-    )
-    
-    # Run the graph
-    config_dict = {"configurable": {"thread_id": "cli-session"}}
+    """Run the orchestrator with user input and return the result."""
+    from weather_outfit_ai.orchestrator.outfit_orchestrator import process_outfit_request
     
     try:
-        result = await graph.ainvoke(initial_state, config=config_dict)
+        # Use the pure Pydantic orchestrator instead of LangGraph
+        result = await process_outfit_request(
+            user_message=user_message, 
+            thread_id="cli-session",
+            conversation_history=conversation_history
+        )
         
-        # Handle both dict and AgentState object returns
-        if isinstance(result, dict):
-            return {
-                "success": True,
-                "response": result.get("response", "No response available"),
-                "location": result.get("location"),
-                "weather_data": result.get("weather_data"),
-                "final_recommendation": result.get("final_recommendation"),
-                "errors": result.get("errors", []),
-                "conversation_history": result.get("conversation_history", [])
-            }
-        else:
-            # Handle AgentState object
-            return {
-                "success": True,
-                "response": getattr(result, 'response', 'No response available'),
-                "location": getattr(result, 'location', None),
-                "weather_data": getattr(result, 'weather_data', None),
-                "final_recommendation": getattr(result, 'final_recommendation', None),
-                "errors": getattr(result, 'errors', []),
-                "conversation_history": getattr(result, 'conversation_history', [])
-            }
+        # Convert AgentState to dict format expected by CLI
+        return {
+            "success": True,
+            "response": result.response or "No response available",
+            "location": result.location,
+            "weather_data": result.weather_data,
+            "final_recommendation": result.final_recommendation,
+            "errors": result.errors,
+            "conversation_history": result.conversation_history
+        }
         
     except Exception as e:
         return {

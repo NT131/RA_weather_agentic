@@ -3,6 +3,7 @@ import json
 
 from langchain_openai import ChatOpenAI
 
+from weather_outfit_ai.models.schemas import ConversationResponse
 from weather_outfit_ai.models.state import AgentState
 from weather_outfit_ai.prompts import Prompts
 
@@ -87,9 +88,19 @@ class ConversationAgent:
             context += "\n\nThis is an initial recommendation request - provide a comprehensive response."
         messages.append({"role": "system", "content": context})
 
-        response = await self.llm.ainvoke(messages)
-        response_content = response.content
-        if isinstance(response_content, str):
-            return response_content.strip()
-        else:
-            return "I apologize, but I couldn't generate a proper response. Please try again."
+        # Use structured output with Pydantic model
+        structured_llm = self.llm.with_structured_output(ConversationResponse)
+        
+        try:
+            response_obj = await structured_llm.ainvoke(messages)
+            # Store the structured response in state metadata for potential use
+            return response_obj.response
+        except Exception as e:
+            print(f"ConversationAgent structured output error: {e}")
+            # Fallback to unstructured response
+            response = await self.llm.ainvoke(messages)
+            response_content = response.content
+            if isinstance(response_content, str):
+                return response_content.strip()
+            else:
+                return "I apologize, but I couldn't generate a proper response. Please try again."

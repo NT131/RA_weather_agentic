@@ -4,19 +4,24 @@ from typing import Any
 
 from langchain_openai import ChatOpenAI
 
+from weather_outfit_ai.config import config
+from weather_outfit_ai.models.schemas import SupervisorPlan
 from weather_outfit_ai.prompts import Prompts
 
 
 class SupervisorAgent:
 
-    def __init__(self, model_name: str = "gpt-4o-mini") -> None:
+    def __init__(self, model_name: str | None = None) -> None:
         """
         Initialize the supervisor agent.
 
         Args:
-            model_name: OpenAI model to use for intent detection
+            model_name: OpenAI model to use for intent detection (defaults to config.OPENAI_MODEL)
         """
-        self.llm = ChatOpenAI(model=model_name, temperature=0.3)
+        self.llm = ChatOpenAI(
+            model=model_name or config.OPENAI_MODEL, 
+            temperature=0.3
+        )
         self.system_prompt = Prompts.supervisor_agent()
 
     async def plan(
@@ -45,15 +50,36 @@ class SupervisorAgent:
                     
         messages.append({"role": "user", "content": message})
         
-        response = await self.llm.ainvoke(messages)
+        # Use structured output with Pydantic model
+        structured_llm = self.llm.with_structured_output(SupervisorPlan)
         
-        if isinstance(response.content, str):
-            data: dict[str, Any] = json.loads(response.content)
-            for key in ["action", "location", "followup_context", "original_message"]:
-                if key not in data:
-                    data[key] = None
+        try:
+            plan = await structured_llm.ainvoke(messages)
+            print(f"SupervisorAgent: Intent detected - Action: {plan.action}, Location: {plan.location}")
+            return plan.model_dump()
+        except Exception as e:
+            print(f"SupervisorAgent structured output error: {e}")
+            # Fallback to unstructured response
+            response = await self.llm.ainvoke(messages)
             
-            print(f"SupervisorAgent: Intent detected - Action: {data.get('action')}, Location: {data.get('location')}")
-            return data
+            if isinstance(response.content, str):
+                try:
+                    data: dict[str, Any] = json.loads(response.content)
+                    for key in ["action", "location", "followup_context", "original_message"]:
+                        if key not in data:
+                            data[key] = None
+                    
+                    print(f"SupervisorAgent: Intent detected - Action: {data.get('action')}, Location: {data.get('location')}")
+                    return data
+                except json.JSONDecodeError as e:
+                    print(f"SupervisorAgent JSON parse error: {e}")
         
-        return None
+        # Final fallback
+        return {
+            "action": "full_recommendation",
+            "location": None,
+            "followup_context": None,
+            "original_message": message,
+            "reasoning": "Fallback to full recommendation due to parsing error",
+            "confidence": 0.5
+        }
