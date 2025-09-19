@@ -41,6 +41,27 @@ class WardrobeService:
 
         return item.id
 
+    def remove_clothing_item(self, item_id: str) -> bool:
+        """Remove a clothing item from the wardrobe."""
+        try:
+            self.collection.delete(ids=[item_id])
+            return True
+        except Exception:
+            return False
+
+    def clear_wardrobe(self) -> bool:
+        """Clear all items from the wardrobe."""
+        try:
+            # Delete the collection and recreate it
+            self.client.delete_collection(name="wardrobe")
+            self.collection = self.client.get_or_create_collection(
+                name="wardrobe",
+                metadata={"description": "Personal clothing items with semantic search"},
+            )
+            return True
+        except Exception:
+            return False
+
     def list_all_items(self) -> list[PersonalClothingItem]:
         """List all clothing items in the wardrobe."""
         try:
