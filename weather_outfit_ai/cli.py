@@ -46,15 +46,30 @@ async def run_graph_interaction(user_message: str, conversation_history: Optiona
     
     try:
         result = await graph.ainvoke(initial_state, config=config_dict)
-        return {
-            "success": True,
-            "response": result.response if result.response else "I couldn't generate a response.",
-            "location": result.location,
-            "weather_data": result.weather_data,
-            "final_recommendation": result.final_recommendation,
-            "errors": result.errors,
-            "conversation_history": result.conversation_history
-        }
+        
+        # Handle both dict and AgentState object returns
+        if isinstance(result, dict):
+            return {
+                "success": True,
+                "response": result.get("response", "No response available"),
+                "location": result.get("location"),
+                "weather_data": result.get("weather_data"),
+                "final_recommendation": result.get("final_recommendation"),
+                "errors": result.get("errors", []),
+                "conversation_history": result.get("conversation_history", [])
+            }
+        else:
+            # Handle AgentState object
+            return {
+                "success": True,
+                "response": getattr(result, 'response', 'No response available'),
+                "location": getattr(result, 'location', None),
+                "weather_data": getattr(result, 'weather_data', None),
+                "final_recommendation": getattr(result, 'final_recommendation', None),
+                "errors": getattr(result, 'errors', []),
+                "conversation_history": getattr(result, 'conversation_history', [])
+            }
+        
     except Exception as e:
         return {
             "success": False,
