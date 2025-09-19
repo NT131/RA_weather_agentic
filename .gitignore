@@ -1,3 +1,5 @@
 .env
 **/__pycache__/
-/wardrobe_db/chroma.sqlite3
+
+# Wardrobe database files
+wardrobe_db/
