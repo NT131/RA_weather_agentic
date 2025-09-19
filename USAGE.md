@@ -22,8 +22,29 @@ sudo lsof -t -i tcp:8000 | xargs kill -9
 python run.py web
 ```
 
+### 2. Frontend (Streamlit UI)
 
-### 2. CLI Interface
+Start the user-friendly web interface:
+
+```bash
+python run.py frontend
+```
+
+The frontend will be available at:
+- Interface: `http://localhost:8501`
+
+**Note**: Make sure the FastAPI backend is running before starting the frontend.
+
+#### Full Stack Setup
+```bash
+# Terminal 1: Start the backend
+python run.py web
+
+# Terminal 2: Start the frontend
+python run.py frontend
+```
+
+### 3. CLI Interface
 
 #### Interactive Chat
 ```bash
@@ -52,6 +73,43 @@ python weather_outfit_ai/cli.py recommend "Your message here"
 ```bash
 docker build -t weather-outfit-ai .
 docker run -p 8000:8000 --env-file .env weather-outfit-ai
+```
+
+#### Build and Run Frontend
+```bash
+cd frontend
+docker build -t weather-outfit-ai-frontend .
+docker run -p 8501:8501 weather-outfit-ai-frontend
+```
+
+#### Full Stack with Docker Compose
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+    env_file:
+      - .env
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+```
+
+Then run:
+```bash
+docker-compose up
 ```
 
 #### CLI via Docker

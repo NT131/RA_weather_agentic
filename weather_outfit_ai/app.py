@@ -64,9 +64,13 @@ app.add_middleware(
 
 # Request/Response models
 class OutfitRequest(BaseModel):
+    location: str
+    style_preference: str = "casual"
+    time_horizon: str = "now"
+
+
+class ChatRequest(BaseModel):
     message: str
-    location: Optional[str] = None
-    context: Optional[str] = None
     conversation_history: Optional[List[str]] = None
 
 
@@ -78,6 +82,13 @@ class OutfitResponse(BaseModel):
     final_recommendation: Optional[dict] = None
     errors: Optional[List[str]] = None
     conversation_history: Optional[List[str]] = None
+
+
+class ChatResponse(BaseModel):
+    response: str
+    location: Optional[str] = None
+    weather: Optional[dict] = None
+    outfit_suggestion: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
@@ -126,39 +137,49 @@ async def get_outfit_recommendation(request: OutfitRequest):
     try:
         logger.info(f"Processing outfit request for {request.location}")
         
-        # Convert request to our state format
-        initial_state = {
-            "location": request.location,
-            "style_preference": request.style_preference,
-            "time_horizon": request.time_horizon,
-            "weather_data": {},
-            "wardrobe_items": [],
-            "outfit_suggestion": "",
-            "conversation_history": [],
-            "current_step": "start"
-        }
+        # Convert request to our state format using the message
+        user_message = f"I need an outfit recommendation for {request.location}. Style: {request.style_preference}. Time: {request.time_horizon}"
         
         # Process the request using the orchestrator
-        result = await orchestrator.process_request(initial_state)
+        result = await orchestrator.process_request(
+            user_message=user_message,
+            thread_id="frontend-form"
+        )
         
         return OutfitRecommendationResponse(
-            location=result["location"],
-            weather=result.get("weather_data", {}),
-            outfit_suggestion=result.get("outfit_suggestion", ""),
-            style_preference=result.get("style_preference", ""),
-            additional_info=result.get("additional_info", "")
+            location=result.location or request.location,
+            weather=result.weather_data if result.weather_data else {},
+            outfit_suggestion=result.outfit_suggestion or result.response or "",
+            style_preference=request.style_preference,
+            additional_info=""
         )
     except Exception as e:
         logger.error(f"Error processing outfit recommendation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/chat", response_model=OutfitResponse)
-async def chat_interaction(request: OutfitRequest):
+@app.post("/chat", response_model=ChatResponse)
+async def chat_interaction(request: ChatRequest):
     """Chat interaction endpoint for conversational interface."""
-    # For now, this is the same as recommend, but could be extended
-    # for more interactive features like session management
-    return await get_outfit_recommendation(request)
+    try:
+        logger.info(f"Processing chat message: {request.message[:100]}...")
+        
+        # Process the chat message using the orchestrator
+        result = await orchestrator.process_request(
+            user_message=request.message,
+            thread_id="frontend-chat",
+            conversation_history=request.conversation_history
+        )
+        
+        return ChatResponse(
+            response=result.response or "I couldn't generate a response.",
+            location=result.location,
+            weather=result.weather_data if result.weather_data else None,
+            outfit_suggestion=result.outfit_suggestion if result.outfit_suggestion else None
+        )
+    except Exception as e:
+        logger.error(f"Error processing chat message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/config", response_model=dict)
