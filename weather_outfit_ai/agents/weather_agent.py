@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_openai import ChatOpenAI
 
-from weather_outfit_ai.models.schemas import WeatherData
+from weather_outfit_ai.models.schemas import WeatherData, WeatherAnalysis
 from weather_outfit_ai.models.state import AgentState
 from weather_outfit_ai.prompts import Prompts
 from weather_outfit_ai.services.weather_service import WeatherService
@@ -31,6 +31,7 @@ class WeatherAgent:
         return state
 
     async def _analyze_weather(self, weather_data: WeatherData) -> dict[str, Any]:
+        """Analyze weather data and return structured analysis."""
         messages = [
             {"role": "system", "content": self.system_prompt},
             {
@@ -43,22 +44,44 @@ class WeatherAgent:
                     Wind Speed: {weather_data.wind_speed} km/h
                     Conditions: {', '.join(weather_data.conditions)}
                     Description: {weather_data.description}
+                    
+                    Return a structured analysis in JSON format with:
+                    - weather_analysis: detailed analysis
+                    - comfort_level: 1-5 rating
+                    - key_factors: list of important factors
+                    - temperature_category: cold/cool/mild/warm/hot
+                    - precipitation_risk: none/low/moderate/high  
+                    - wind_factor: calm/breezy/windy/very_windy
+                    - recommendations: specific clothing suggestions
                 """,
             },
         ]
 
-        response = await self.llm.ainvoke(messages)
+        # Use structured output with Pydantic model
+        structured_llm = self.llm.with_structured_output(WeatherAnalysis)
         
-        if isinstance(response.content, str) and response.content.strip():
-            try:
-                return json.loads(response.content.strip())
-            except json.JSONDecodeError as e:
-                print(f"WeatherAgent JSON parse error: {e}")
-                print(f"Response content: '{response.content}'")
-        
-        return {
-            "weather_analysis": f"Weather in {weather_data.location}: {weather_data.description}, {weather_data.temperature}°C",
-            "comfort_level": 3,
-            "key_factors": ["temperature", "conditions"],
-            "recommendations": "Dress appropriately for the current conditions.",
-        }
+        try:
+            analysis = await structured_llm.ainvoke(messages)
+            return analysis.model_dump()
+        except Exception as e:
+            print(f"WeatherAgent structured output error: {e}")
+            # Fallback to unstructured response
+            response = await self.llm.ainvoke(messages)
+            
+            if isinstance(response.content, str) and response.content.strip():
+                try:
+                    return json.loads(response.content.strip())
+                except json.JSONDecodeError as e:
+                    print(f"WeatherAgent JSON parse error: {e}")
+                    print(f"Response content: '{response.content}'")
+            
+            # Final fallback with minimal structure
+            return {
+                "weather_analysis": f"Weather in {weather_data.location}: {weather_data.description}, {weather_data.temperature}°C",
+                "comfort_level": 3,
+                "key_factors": ["temperature", "conditions"],
+                "temperature_category": "mild",
+                "precipitation_risk": "low",
+                "wind_factor": "calm",
+                "recommendations": "Dress appropriately for the current conditions.",
+            }

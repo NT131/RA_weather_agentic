@@ -104,3 +104,35 @@ class OutfitRecommendation(BaseModel):
     formality_match: str = Field(
         ..., description="How the outfit matches the context/formality needed"
     )
+
+
+class WeatherAnalysis(BaseModel):
+    """Structured weather analysis from the weather agent."""
+    
+    weather_analysis: str = Field(..., description="Analysis of current weather conditions")
+    comfort_level: int = Field(..., description="Comfort level from 1-5 for outdoor activities")
+    key_factors: list[str] = Field(..., description="Key weather factors to consider for clothing")
+    temperature_category: str = Field(..., description="Temperature category: cold, cool, mild, warm, hot")
+    precipitation_risk: str = Field(..., description="Precipitation risk: none, low, moderate, high")
+    wind_factor: str = Field(..., description="Wind consideration: calm, breezy, windy, very_windy")
+    recommendations: str = Field(..., description="Weather-specific clothing recommendations")
+
+
+class SupervisorPlan(BaseModel):
+    """Supervisor agent's analysis and routing plan."""
+    
+    action: str = Field(..., description="Action to take: full_recommendation, weather_only, wardrobe_only, conversation_only")
+    location: str | None = Field(None, description="Extracted location from user message")
+    followup_context: str | None = Field(None, description="Additional context for the request")
+    original_message: str = Field(..., description="Original user message")
+    reasoning: str = Field(..., description="Reasoning for the chosen action")
+    confidence: float = Field(..., description="Confidence in the analysis (0.0-1.0)")
+
+
+class ConversationResponse(BaseModel):
+    """Final response from the conversation agent."""
+    
+    response: str = Field(..., description="Natural language response to the user")
+    response_type: str = Field(..., description="Type of response: outfit_recommendation, weather_info, general_chat")
+    confidence: float = Field(..., description="Confidence in the response quality (0.0-1.0)")
+    suggestions: list[str] = Field(default_factory=list, description="Follow-up suggestions for the user")

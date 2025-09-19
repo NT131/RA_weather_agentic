@@ -14,7 +14,9 @@ from weather_outfit_ai.services.wardrobe_service import WardrobeService
 
 def create_outfit_graph():
     llm = ChatOpenAI(
-        model="gpt-4o-mini", api_key=config.OPENAI_API_KEY, temperature=0.7
+        model=config.OPENAI_MODEL, 
+        api_key=config.OPENAI_API_KEY, 
+        temperature=config.OPENAI_TEMPERATURE
     )
 
     wardrobe_service = WardrobeService()
