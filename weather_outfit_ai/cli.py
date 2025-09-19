@@ -48,7 +48,7 @@ async def run_graph_interaction(user_message: str, conversation_history: Optiona
         result = await graph.ainvoke(initial_state, config=config_dict)
         return {
             "success": True,
-            "response": result.response,
+            "response": result.response if result.response else "I couldn't generate a response.",
             "location": result.location,
             "weather_data": result.weather_data,
             "final_recommendation": result.final_recommendation,
@@ -81,38 +81,42 @@ def display_result(result: dict):
     ))
     
     # Display additional details if available
-    if result.get("weather_data"):
+    if result.get("weather_data") and result["weather_data"]:
         weather = result["weather_data"]
         weather_table = Table(title="Weather Information")
         weather_table.add_column("Property", style="cyan")
         weather_table.add_column("Value", style="white")
         
-        weather_table.add_row("Location", weather.location or "N/A")
-        weather_table.add_row("Temperature", f"{weather.temperature}°C" if weather.temperature else "N/A")
-        weather_table.add_row("Feels Like", f"{weather.feels_like}°C" if weather.feels_like else "N/A")
-        weather_table.add_row("Description", weather.description or "N/A")
-        weather_table.add_row("Humidity", f"{weather.humidity}%" if weather.humidity else "N/A")
-        weather_table.add_row("Wind Speed", f"{weather.wind_speed} km/h" if weather.wind_speed else "N/A")
+        weather_table.add_row("Location", getattr(weather, 'location', 'N/A') or "N/A")
+        weather_table.add_row("Temperature", f"{getattr(weather, 'temperature', 'N/A')}°C" if getattr(weather, 'temperature', None) else "N/A")
+        weather_table.add_row("Feels Like", f"{getattr(weather, 'feels_like', 'N/A')}°C" if getattr(weather, 'feels_like', None) else "N/A")
+        weather_table.add_row("Description", getattr(weather, 'description', 'N/A') or "N/A")
+        weather_table.add_row("Humidity", f"{getattr(weather, 'humidity', 'N/A')}%" if getattr(weather, 'humidity', None) else "N/A")
+        weather_table.add_row("Wind Speed", f"{getattr(weather, 'wind_speed', 'N/A')} km/h" if getattr(weather, 'wind_speed', None) else "N/A")
         
         console.print(weather_table)
     
     # Display outfit details if available
-    if result.get("final_recommendation"):
+    if result.get("final_recommendation") and result["final_recommendation"]:
         outfit = result["final_recommendation"]
         outfit_table = Table(title="Outfit Details")
         outfit_table.add_column("Category", style="magenta")
         outfit_table.add_column("Item", style="white")
         
-        if outfit.selected_top:
-            outfit_table.add_row("Top", f"{outfit.selected_top.name} ({outfit.selected_top.color})")
-        if outfit.selected_bottom:
-            outfit_table.add_row("Bottom", f"{outfit.selected_bottom.name} ({outfit.selected_bottom.color})")
-        if outfit.selected_footwear:
-            outfit_table.add_row("Footwear", f"{outfit.selected_footwear.name} ({outfit.selected_footwear.color})")
-        if outfit.selected_outerwear:
-            outfit_table.add_row("Outerwear", f"{outfit.selected_outerwear.name} ({outfit.selected_outerwear.color})")
-        if outfit.selected_accessories:
-            accessories = ", ".join([f"{acc.name} ({acc.color})" for acc in outfit.selected_accessories])
+        if getattr(outfit, 'selected_top', None):
+            top = outfit.selected_top
+            outfit_table.add_row("Top", f"{getattr(top, 'name', 'Unknown')} ({getattr(top, 'color', 'Unknown')})")
+        if getattr(outfit, 'selected_bottom', None):
+            bottom = outfit.selected_bottom
+            outfit_table.add_row("Bottom", f"{getattr(bottom, 'name', 'Unknown')} ({getattr(bottom, 'color', 'Unknown')})")
+        if getattr(outfit, 'selected_footwear', None):
+            footwear = outfit.selected_footwear
+            outfit_table.add_row("Footwear", f"{getattr(footwear, 'name', 'Unknown')} ({getattr(footwear, 'color', 'Unknown')})")
+        if getattr(outfit, 'selected_outerwear', None):
+            outerwear = outfit.selected_outerwear
+            outfit_table.add_row("Outerwear", f"{getattr(outerwear, 'name', 'Unknown')} ({getattr(outerwear, 'color', 'Unknown')})")
+        if getattr(outfit, 'selected_accessories', None):
+            accessories = ", ".join([f"{getattr(acc, 'name', 'Unknown')} ({getattr(acc, 'color', 'Unknown')})" for acc in outfit.selected_accessories])
             outfit_table.add_row("Accessories", accessories)
         
         console.print(outfit_table)
