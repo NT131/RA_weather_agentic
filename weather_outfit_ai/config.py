@@ -35,6 +35,11 @@ class Config:
         return os.getenv("LANGSMITH_TRACING", "true")
 
     @property
+    def LANGSMITH_WORKSPACE_ID(self) -> str | None:  # noqa: N802
+        """Get LangSmith workspace ID from environment."""
+        return os.getenv("LANGSMITH_WORKSPACE_ID")
+
+    @property
     def WEATHER_API_KEY(self) -> str | None:  # noqa: N802
         """Get Weather API key from environment."""
         return os.getenv("WEATHER_API_KEY")
@@ -47,10 +52,33 @@ class Config:
     def _setup_langsmith_environment(self) -> None:
         """Set up LangSmith environment variables only when LangSmith is configured."""
         if self.LANGSMITH_API_KEY:
-            os.environ["LANGCHAIN_TRACING_V2"] = self.LANGSMITH_TRACING
-            os.environ["LANGCHAIN_API_KEY"] = self.LANGSMITH_API_KEY
-            os.environ["LANGCHAIN_PROJECT"] = self.LANGSMITH_PROJECT
-            os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+            try:
+                os.environ["LANGCHAIN_TRACING_V2"] = self.LANGSMITH_TRACING
+                os.environ["LANGCHAIN_API_KEY"] = self.LANGSMITH_API_KEY
+                os.environ["LANGCHAIN_PROJECT"] = self.LANGSMITH_PROJECT
+                os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+                
+                # Set workspace ID if provided (required for org-scoped keys)
+                if self.LANGSMITH_WORKSPACE_ID:
+                    os.environ["LANGSMITH_WORKSPACE_ID"] = self.LANGSMITH_WORKSPACE_ID
+                
+                print(f"✅ LangSmith tracing enabled for project: {self.LANGSMITH_PROJECT}")
+                if self.LANGSMITH_WORKSPACE_ID:
+                    print(f"🏢 Using workspace ID: {self.LANGSMITH_WORKSPACE_ID}")
+                    
+            except Exception as e:
+                print(f"⚠️  Warning: LangSmith setup failed: {e}")
+                self._disable_langsmith()
+        else:
+            print("📝 LangSmith tracing disabled (no API key provided)")
+
+    def _disable_langsmith(self) -> None:
+        """Disable LangSmith tracing."""
+        os.environ["LANGCHAIN_TRACING_V2"] = "false"
+        for key in ["LANGCHAIN_API_KEY", "LANGCHAIN_PROJECT", "LANGCHAIN_ENDPOINT", "LANGSMITH_WORKSPACE_ID"]:
+            if key in os.environ:
+                del os.environ[key]
+        print("🚫 LangSmith tracing disabled due to configuration issues")
 
     def validate(self) -> None:
         """Validate required configuration."""
@@ -67,6 +95,7 @@ class Config:
             "LANGSMITH_API_KEY": "***" if self.LANGSMITH_API_KEY else None,
             "LANGSMITH_PROJECT": self.LANGSMITH_PROJECT,
             "LANGSMITH_TRACING": self.LANGSMITH_TRACING,
+            "LANGSMITH_WORKSPACE_ID": "***" if self.LANGSMITH_WORKSPACE_ID else None,
             "WEATHER_API_KEY": "***" if self.WEATHER_API_KEY else None,
         }
 
